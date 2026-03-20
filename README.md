@@ -44,6 +44,7 @@ curl -X POST http://localhost:8081/api/orders \
 ```
 
 *   **Verification**: Open the Temporal UI ([http://localhost:8080](http://localhost:8080)), locate `OrderFlow-100`, and observe it transition through all 4 activities successfully.
+![Successful process in Temporal UI](./100.png)
 
 ### 2. SAGA Rollback: Payment Failure
 
@@ -61,6 +62,8 @@ curl -X POST "http://localhost:8081/api/orders?simulatePaymentFailure=true" \
     3. The `processPayment` activity will fail multiple times (Pending state).
     4. Once retries are exhausted, the workflow catches the failure, triggers `saga.compensate()`, and executes `releaseInventory` and cancels the order in DB!
     5. Query the workflow status: `curl http://localhost:8081/api/orders/200/workflow-status` (Will return `CANCELED_DUE_TO_FAILURE`).
+
+    ![Payment Failure in Temporal UI](./200.png)
 
 ### 3. SAGA Rollback: Shipping Failure
 
@@ -81,6 +84,8 @@ If a service goes down completely and a workflow fails, you can "Reset" it from 
 3.  Click the **Reset** button in the top right corner (often under an actions dropdown).
 4.  Select the **First Workflow Task** to restart the entire workflow execution from the beginning.
 5.  Alternatively, because the default `WorkflowIdReusePolicy` allows reusing IDs for failed workflows, you can simply run your `POST /api/orders` curl again using the **exact same `orderId`**. Temporal will start a fresh execution for that failed order!
+
+![Shipping Failure in Temporal UI](./300.png)
 
 ## Teardown
 
