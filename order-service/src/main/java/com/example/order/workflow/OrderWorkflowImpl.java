@@ -101,7 +101,7 @@ public class OrderWorkflowImpl implements OrderWorkflow {
             status = "CANCELED_DUE_TO_FAILURE";
             logger.info("SAGA compensations completed for order {}", orderId);
             
-            throw io.temporal.failure.ApplicationFailure.newFailure("Order workflow failed and compensated", "SAGA_FAILURE", e);
+            throw io.temporal.failure.ApplicationFailure.newFailure("Order workflow failed and compensated", "SAGA_FAILURE");
         }
     }
 
