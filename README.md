@@ -74,6 +74,7 @@ curl -X POST "http://localhost:8081/api/orders?simulateShippingFailure=true" \
   -H "Content-Type: application/json" \
   -d '{"orderId": "300", "amount": 100.0}'
 ```
+![Shipping Failure in Temporal UI](./300.png)
 
 ### 4. Manual Restarts and Resetting from the UI
 
@@ -84,8 +85,6 @@ If a service goes down completely and a workflow fails, you can "Reset" it from 
 3.  Click the **Reset** button in the top right corner (often under an actions dropdown).
 4.  Select the **First Workflow Task** to restart the entire workflow execution from the beginning.
 5.  Alternatively, because the default `WorkflowIdReusePolicy` allows reusing IDs for failed workflows, you can simply run your `POST /api/orders` curl again using the **exact same `orderId`**. Temporal will start a fresh execution for that failed order!
-
-![Shipping Failure in Temporal UI](./300.png)
 
 ## Teardown
 
