@@ -72,14 +72,15 @@ curl -X POST "http://localhost:8081/api/orders?simulateShippingFailure=true" \
   -d '{"orderId": "300", "amount": 100.0}'
 ```
 
-### 4. Manual Retry from the Temporal UI
+### 4. Manual Restarts and Resetting from the UI
 
-If a service goes down completely and a workflow fails, Temporal allows you to fix the underlying issue and manually retry or reset the workflow.
+If a service goes down completely and a workflow fails, you can "Reset" it from the Temporal UI, or simply issue a new POST request.
 
 1.  Open the Temporal UI ([http://localhost:8080](http://localhost:8080)).
 2.  Go to the **Workflows** list and click on the failed workflow (e.g., `OrderFlow-200`).
-3.  Click the **Retry** button in the top right corner.
-4.  This creates a new workflow execution with the same input arguments (if you wish, you can 'Reset' to a specific point in the history instead of fully retrying). Since the failure simulation flags are saved in the input, the workflow will execute identically, but in a real-world scenario where a DB outage caused the failure, the retry would now succeed!
+3.  Click the **Reset** button in the top right corner (often under an actions dropdown).
+4.  Select the **First Workflow Task** to restart the entire workflow execution from the beginning.
+5.  Alternatively, because the default `WorkflowIdReusePolicy` allows reusing IDs for failed workflows, you can simply run your `POST /api/orders` curl again using the **exact same `orderId`**. Temporal will start a fresh execution for that failed order!
 
 ## Teardown
 
