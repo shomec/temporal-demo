@@ -8,7 +8,7 @@ import io.temporal.workflow.WorkflowMethod;
 public interface OrderWorkflow {
 
     @WorkflowMethod
-    void processOrder(String orderId, Double amount, boolean simulatePaymentFailure);
+    void processOrder(String orderId, Double amount, boolean simulateInventoryFailure, boolean simulatePaymentFailure, boolean simulateShippingFailure);
 
     @QueryMethod
     String getStatus();

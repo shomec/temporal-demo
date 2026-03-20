@@ -25,23 +25,23 @@ public class OrderController {
 
     @PostMapping
     public ResponseEntity<?> createOrder(@RequestBody Map<String, Object> request,
-                                         @RequestParam(required = false, defaultValue = "false") boolean simulatePaymentFailure) {
+                                         @RequestParam(required = false, defaultValue = "false") boolean simulateInventoryFailure,
+                                         @RequestParam(required = false, defaultValue = "false") boolean simulatePaymentFailure,
+                                         @RequestParam(required = false, defaultValue = "false") boolean simulateShippingFailure) {
         String orderId = (String) request.get("orderId");
         Double amount = request.get("amount") != null ? Double.valueOf(request.get("amount").toString()) : 0.0;
 
-        // Set Workflow options uniquely identifying this run
         WorkflowOptions options = WorkflowOptions.newBuilder()
                 .setTaskQueue("ORDER_TASK_QUEUE")
+                // Adding WorkflowId Reuse Policy is a good practice, but setting ID is enough for demo
                 .setWorkflowId("OrderFlow-" + orderId)
                 .build();
 
-        // Create stub
         OrderWorkflow workflow = workflowClient.newWorkflowStub(OrderWorkflow.class, options);
+        WorkflowClient.start(workflow::processOrder, orderId, amount, simulateInventoryFailure, simulatePaymentFailure, simulateShippingFailure);
 
-        // Start asynchronously
-        WorkflowClient.start(workflow::processOrder, orderId, amount, simulatePaymentFailure);
-
-        return ResponseEntity.accepted().body("Order workflow started with ID: " + orderId + ". Simulate Payment Failure: " + simulatePaymentFailure);
+        return ResponseEntity.accepted().body("SAGA started with ID: " + orderId 
+            + ". Failures[Inv:" + simulateInventoryFailure + ", Pay:" + simulatePaymentFailure + ", Ship:" + simulateShippingFailure + "]");
     }
 
     @GetMapping("/{orderId}")
@@ -53,7 +53,6 @@ public class OrderController {
 
         Optional<OrderEntity> order = orderRepository.findById(orderId);
         if (order.isPresent()) {
-            // Option 1: Return direct from database
             return ResponseEntity.ok(order.get());
         } else {
             return ResponseEntity.notFound().build();
@@ -62,7 +61,6 @@ public class OrderController {
 
     @GetMapping("/{orderId}/workflow-status")
     public ResponseEntity<?> getWorkflowStatus(@PathVariable String orderId) {
-        // Option 2: Instead of DB, query the running Temporal Workflow directly
         OrderWorkflow workflow = workflowClient.newWorkflowStub(OrderWorkflow.class, "OrderFlow-" + orderId);
         try {
             String status = workflow.getStatus();

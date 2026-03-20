@@ -60,5 +60,21 @@ services:
     depends_on:
       - temporal
 
+  inventory-service:
+    build:
+      context: ./inventory-service
+    environment:
+      - temporal.target=temporal:7233
+    depends_on:
+      - temporal
+
+  shipping-service:
+    build:
+      context: ./shipping-service
+    environment:
+      - temporal.target=temporal:7233
+    depends_on:
+      - temporal
+
 volumes:
   order-db-data:

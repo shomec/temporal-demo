@@ -4,11 +4,10 @@ import io.temporal.activity.ActivityInterface;
 import io.temporal.activity.ActivityMethod;
 
 @ActivityInterface
-public interface PaymentActivity {
+public interface InventoryActivity {
+    @ActivityMethod
+    boolean reserveInventory(String orderId, String item, boolean simulateFailure);
 
     @ActivityMethod
-    boolean processPayment(String orderId, Double amount, boolean simulateFailure);
-
-    @ActivityMethod
-    void refundPayment(String orderId, Double amount);
+    void releaseInventory(String orderId, String item);
 }

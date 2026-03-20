@@ -1,44 +1,41 @@
-# Temporal Demo: Order Management API (Spring Boot)
+# Temporal Demo: Multi-Service SAGA Orchestration
 
-This project is a demonstration of microservice orchestration using [Temporal.io](https://temporal.io) and Spring Boot. It features two self-contained microservices (`order-service` and `payment-service`) that use Temporal Workflows and Activities to guarantee execution, handle automatic retries, and recover from failures like database crashes or downstream service outages.
+This project demonstrates distributed SAGA orchestration using [Temporal.io](https://temporal.io) and Spring Boot/Java. It features four self-contained microservices choreographed by a central Temporal orchestrator to maintain data consistency across distributed transactions.
 
 ## Architecture
 
 ![Architecture Diagram](./architecture_diagram.png)
 
-*   **Temporal Server & UI**: Core orchestration engine and its web dashboard.
-*   **Order Service**: Exposes REST APIs, manages SQLite persistence using Spring Data JPA, and runs the `OrderWorkflow` orchestrator and `OrderActivity`.
-*   **Payment Service**: A headless worker service that executes the remote `PaymentActivity`.
+The system transitions an Order through reserving inventory, processing payment, and shipping the product. If any step fails, **Temporal's built-in Saga functionality** will automatically execute rollback activities (e.g., releasing inventory or refunding payment).
 
-## Prerequisites
-
-*   [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Must be running)
-*   Curl or Postman (for testing APIs)
+*   **Temporal Server & UI**: Core orchestration engine and web dashboard.
+*   **Order Service**: Exposes REST APIs, manages local database persistence, and runs the `OrderWorkflow` which acts as the SAGA orchestrator.
+*   **Inventory Service**: Mock Temporal worker handling `reserveInventory` and `releaseInventory`.
+*   **Payment Service**: Mock Temporal worker handling `processPayment` and `refundPayment`.
+*   **Shipping Service**: Mock Temporal worker handling `shipProduct` and `cancelShipping`.
 
 ## Setup and Initialization
 
-1.  **Start Docker Desktop**: Ensure your Docker daemon is up and running.
-2.  **Pull Images and Start Containers**: Open your terminal in the root of this project (`temporal-demo`) and run:
+1.  **Start Docker Desktop**: Ensure your Docker daemon is running.
+2.  **Pull Images and Start Containers**: Open your terminal in the root of this project and run:
 
     ```bash
     docker compose up --build -d
     ```
 
-    *This command builds the Spring Boot Java images and starts the Temporal server, UI, SQLite database (via volume), order-service, and payment-service.*
-
 3.  **Verify Services**:
-    *   Temporal UI should be available at: [http://localhost:8080](http://localhost:8080)
-    *   Order Service APIs should be available at: `http://localhost:8081/api/orders`
+    *   Temporal UI: [http://localhost:8080](http://localhost:8080)
+    *   Order Service APIs: `http://localhost:8081/api/orders`
 
 ---
 
-## Testing Scenarios
+## Testing the SAGA Pattern
 
 We have built specific endpoints and flags to demonstrate Temporal's robust handling of typical microservice failures.
 
 ### 1. The Happy Path (Standard Execution)
 
-Create a normal order that completes successfully.
+Create an order that successfully reserves inventory, charges payment, and ships.
 
 ```bash
 curl -X POST http://localhost:8081/api/orders \
@@ -46,69 +43,48 @@ curl -X POST http://localhost:8081/api/orders \
   -d '{"orderId": "100", "amount": 50.0}'
 ```
 
-*   **Expected Result**: You receive an `HTTP 202 Accepted` response immediately.
-*   **Verification**: 
-    1.  Open the Temporal UI ([http://localhost:8080](http://localhost:8080)).
-    2.  Locate the workflow named `OrderFlow-100`.
-    3.  See it transition through creating the order, processing payment, and completing.
+*   **Verification**: Open the Temporal UI ([http://localhost:8080](http://localhost:8080)), locate `OrderFlow-100`, and observe it transition through all 4 activities successfully.
 
-### 2. Live Failure Simulation: Payment Integration Outage
+### 2. SAGA Rollback: Payment Failure
 
-Demonstrate how Temporal handles a downstream failure (e.g., the Payment Gateway is down). By passing `simulatePaymentFailure=true`, we force the `payment-service` worker to throw an Exception during execution.
+Demonstrate a failure in the Payment service. We'll pass `simulatePaymentFailure=true` which forces the payment activity to fail after exhausting its retries (configured for 3 attempts). 
 
 ```bash
-curl -X POST http://localhost:8081/api/orders?simulatePaymentFailure=true \
+curl -X POST "http://localhost:8081/api/orders?simulatePaymentFailure=true" \
   -H "Content-Type: application/json" \
   -d '{"orderId": "200", "amount": 75.0}'
 ```
 
-*   **Expected Result**: You still receive an `HTTP 202 Accepted` response from the API because the request was durably sent to Temporal.
-*   **Verification**:
-    1.  Open the Temporal UI ([http://localhost:8080](http://localhost:8080)).
-    2.  Locate the workflow named `OrderFlow-200`.
-    3.  You will see the `processPayment` activity stuck in a **Pending** or **Failed** state, automatically retrying with exponential backoff.
-    4.  Notice that the overall workflow is *not* broken; it is simply waiting for the payment activity to eventually succeed (or exhaust retries).
+*   **SAGA Verification**:
+    1. Open the Temporal UI and monitor `OrderFlow-200`.
+    2. The `reserveInventory` activity will succeed.
+    3. The `processPayment` activity will fail multiple times (Pending state).
+    4. Once retries are exhausted, the workflow catches the failure, triggers `saga.compensate()`, and executes `releaseInventory` and cancels the order in DB!
+    5. Query the workflow status: `curl http://localhost:8081/api/orders/200/workflow-status` (Will return `CANCELED_DUE_TO_FAILURE`).
 
-### 3. Live Failure Simulation: Database Fetch Failure
+### 3. SAGA Rollback: Shipping Failure
 
-Demonstrate what happens when standard synchronous APIs fail versus Temporal background processes.
-
-```bash
-# Force a database failure on the GET endpoint
-curl 'http://localhost:8081/api/orders/100?simulateDbFailure=true'
-```
-
-*   **Expected Result**: The synchronous REST call fails immediately with an `HTTP 500 Internal Server Error`.
-
-**However, Temporal still has the state!** Even if your operational database is currently unreachable via standard REST fetches, you can query Temporal directly for the exact workflow status:
+A failure at the end of the line will trigger rollbacks for *both* payment and inventory.
 
 ```bash
-# Ask Temporal for the workflow status instead of the database
-curl http://localhost:8081/api/orders/100/workflow-status
+curl -X POST "http://localhost:8081/api/orders?simulateShippingFailure=true" \
+  -H "Content-Type: application/json" \
+  -d '{"orderId": "300", "amount": 100.0}'
 ```
 
-*   **Expected Result**: Returns `{"workflowStatus":"COMPLETED"}`.
+### 4. Manual Retry from the Temporal UI
 
-### 4. Viewing the SQLite Database
+If a service goes down completely and a workflow fails, Temporal allows you to fix the underlying issue and manually retry or reset the workflow.
 
-You can inspect the SQLite database directly by executing a command inside the `order-service` container:
-
-```bash
-# Connect to the SQLite database inside the running container
-docker compose exec order-service sqlite3 /app/data/orders.db
-
-# Once inside the sqlite> prompt, you can run SQL queries:
-sqlite> .tables
-sqlite> SELECT * FROM orders;
-sqlite> .exit
-```
+1.  Open the Temporal UI ([http://localhost:8080](http://localhost:8080)).
+2.  Go to the **Workflows** list and click on the failed workflow (e.g., `OrderFlow-200`).
+3.  Click the **Retry** button in the top right corner.
+4.  This creates a new workflow execution with the same input arguments (if you wish, you can 'Reset' to a specific point in the history instead of fully retrying). Since the failure simulation flags are saved in the input, the workflow will execute identically, but in a real-world scenario where a DB outage caused the failure, the retry would now succeed!
 
 ## Teardown
 
-To shut down the cluster and clean up the containers:
-
+To shut down the cluster and clean up:
 ```bash
 docker compose down
 ```
-
-*(Note: Order data in SQLite is preserved in the Docker volume. To wipe the DB, run `docker compose down -v`)*
+*(Note: Order data is preserved in the Docker volume. Run `docker compose down -v` to wipe it)*

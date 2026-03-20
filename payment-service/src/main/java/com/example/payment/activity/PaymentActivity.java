@@ -8,4 +8,7 @@ public interface PaymentActivity {
 
     @ActivityMethod
     boolean processPayment(String orderId, Double amount, boolean simulateFailure);
+
+    @ActivityMethod
+    void refundPayment(String orderId, Double amount);
 }
