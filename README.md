@@ -31,7 +31,7 @@ The system transitions an Order through reserving inventory, processing payment,
 
 ## Testing the SAGA Pattern
 
-We have built specific endpoints and flags to demonstrate Temporal's robust handling of typical microservice failures.
+Specific endpoints and flags have been built to demonstrate Temporal's robust handling of typical microservice failures.
 
 ### 1. The Happy Path (Standard Execution)
 
@@ -78,7 +78,7 @@ curl -X POST "http://localhost:8081/api/orders?simulateShippingFailure=true" \
 
 ### 4. Manual Restarts and Resetting from the UI
 
-If a service goes down completely and a workflow fails, you can "Reset" it from the Temporal UI, or simply issue a new POST request.
+If a service goes down completely and a workflow fails, "Reset" from the Temporal UI can be used, or simply issue a new POST request.
 
 1.  Open the Temporal UI ([http://localhost:8080](http://localhost:8080)).
 2.  Go to the **Workflows** list and click on the failed workflow (e.g., `OrderFlow-200`).
